@@ -1,10 +1,9 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>org.gotti.wurmunlimited</groupId>
 	<artifactId>server-modlauncher-parent</artifactId>
-	<version>0.24</version>
+	<version>0.33</version>
 	<packaging>pom</packaging>
 
 	<name>server modlauncher parent</name>
@@ -12,22 +11,7 @@
 	<modules>
 		<module>modules/modlauncher</module>
 		<module>modules/patcher</module>
-		<module>modules/demo/actiondemo</module>
-		<module>modules/demo/christmasmod</module>
-		<module>modules/demo/creaturedemo</module>
-		<module>modules/demo/digtoground</module>
-		<module>modules/demo/hitchingpost</module>
-		<module>modules/demo/serverfixes</module>
-		<module>modules/mods/announcer</module>
-		<module>modules/mods/bagofholding</module>
-		<module>modules/mods/creatureagemod</module>
-		<module>modules/mods/cropmod</module>
-		<module>modules/mods/harvesthelper</module>
-		<module>modules/mods/inbreedwarning</module>
-		<module>modules/mods/scriptrunner</module>
-		<module>modules/mods/serverpacks</module>
-		<module>modules/mods/spellmod</module>
-		<module>modules/mods/testmod</module>
+		<module>modules/mods</module>
 		<module>modules/dist</module>
 	</modules>
 
@@ -48,6 +32,19 @@
 			<url>scp://gotti.no-ip.org/srv/maven/repository</url>
 		</repository>
 	</distributionManagement>
+	
+	<scm>
+		<connection>scm:git:https://github.com/ago1024/WurmServerModLauncher.git</connection>
+		<developerConnection>scm:git:git@github.com:ago1024/WurmServerModLauncher.git</developerConnection>
+		<url>https://github.com/ago1024/WurmServerModLauncher</url>
+		<tag>v0.33</tag>
+	</scm>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+	</properties>
 
 	<build>
 		<extensions>
@@ -61,13 +58,11 @@
 
 		<plugins>
 			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.1</version>
-				<inherited>true</inherited>
+				<artifactId>maven-release-plugin</artifactId>
+				<version>2.5.3</version>
 				<configuration>
-					<source>1.8</source>
-					<target>1.8</target>
+					<tagNameFormat>v@{project.version}</tagNameFormat>
+					<arguments>-Dmaven.javadoc.skip=true</arguments>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -114,6 +109,34 @@
 						<goals>
 							<goal>jar-no-fork</goal>
 						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<artifactId>maven-resources-plugin</artifactId>
+				<version>3.0.2</version>
+				<executions>
+					<execution>
+						<id>copy-properties</id>
+						<phase>process-resources</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.outputDirectory}</outputDirectory>
+							<overwrite>true</overwrite>
+							<resources>
+								<resource>
+									<directory>${project.basedir}/src/dist</directory>
+									<targetPath>META-INF/org.gotti.wurmunlimited.modloader</targetPath>
+									<includes>
+										<include>${project.name}.properties</include>
+										<include>${project.name}.config</include>
+									</includes>
+									<filtering>true</filtering>
+								</resource>
+							</resources>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>

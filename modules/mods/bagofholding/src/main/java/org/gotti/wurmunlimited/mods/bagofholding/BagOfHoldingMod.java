@@ -10,15 +10,23 @@ import java.util.logging.Logger;
 import javassist.CannotCompileException;
 import javassist.ClassPool;
 import javassist.CtClass;
+import javassist.CtMethod;
 import javassist.NotFoundException;
+import javassist.bytecode.BadBytecode;
+import javassist.bytecode.Bytecode;
+import javassist.bytecode.CodeAttribute;
 import javassist.bytecode.Descriptor;
+import javassist.bytecode.LocalVariableAttribute;
+import javassist.bytecode.MethodInfo;
 import javassist.expr.ExprEditor;
 import javassist.expr.MethodCall;
 
 import org.gotti.wurmunlimited.modloader.ReflectionUtil;
+import org.gotti.wurmunlimited.modloader.classhooks.CodeReplacer;
 import org.gotti.wurmunlimited.modloader.classhooks.HookException;
 import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
 import org.gotti.wurmunlimited.modloader.classhooks.InvocationHandlerFactory;
+import org.gotti.wurmunlimited.modloader.classhooks.LocalNameLookup;
 import org.gotti.wurmunlimited.modloader.interfaces.Configurable;
 import org.gotti.wurmunlimited.modloader.interfaces.Initable;
 import org.gotti.wurmunlimited.modloader.interfaces.PreInitable;
@@ -29,7 +37,6 @@ import org.gotti.wurmunlimited.modsupport.actions.ModActions;
 import com.wurmonline.server.deities.Deities;
 import com.wurmonline.server.deities.Deity;
 import com.wurmonline.server.items.Item;
-import com.wurmonline.server.spells.BagOfHolding;
 import com.wurmonline.server.spells.Spells;
 
 public class BagOfHoldingMod implements WurmServerMod, Initable, PreInitable, Configurable, ServerStartedListener {
@@ -38,6 +45,7 @@ public class BagOfHoldingMod implements WurmServerMod, Initable, PreInitable, Co
 	private int spellDifficulty = 20;
 	private long spellCooldown = 300000L;
 	private int effectModifier = 0;
+	private boolean allowComponentItems;
 	
 	private static final Logger logger = Logger.getLogger(BagOfHoldingMod.class.getName());
 	
@@ -70,11 +78,13 @@ public class BagOfHoldingMod implements WurmServerMod, Initable, PreInitable, Co
 		spellDifficulty = Integer.valueOf(properties.getProperty("spellDifficulty", Integer.toString(spellDifficulty)));
 		spellCooldown = Long.valueOf(properties.getProperty("spellCooldown", Long.toString(spellCooldown)));
 		effectModifier = Integer.valueOf(properties.getProperty("effectModifier", Integer.toString(effectModifier)));
+		allowComponentItems = Boolean.parseBoolean(properties.getProperty("allowComponentItems", "false"));
 		
 		logger.log(Level.INFO, "spellCost: " + spellCost);
 		logger.log(Level.INFO, "spellDifficulty: " + spellDifficulty);
 		logger.log(Level.INFO, "spellCooldown: " + spellCooldown);
 		logger.log(Level.INFO, "effectModifier: " + effectModifier);
+		logger.log(Level.INFO, "allowComponentItems: " + allowComponentItems);
 	}
 	
 	@Override
@@ -101,15 +111,41 @@ public class BagOfHoldingMod implements WurmServerMod, Initable, PreInitable, Co
 					}
 				}
 			};
-			
+
+			CtClass ctItem = classPool.get("com.wurmonline.server.items.Item");
+
 			String descriptor = Descriptor.ofMethod(CtClass.booleanType, new CtClass[] { classPool.get("com.wurmonline.server.items.Item"), CtClass.booleanType });
-			classPool.get("com.wurmonline.server.items.Item").getMethod("insertItem", descriptor).instrument(exprEditor);
+			ctItem.getMethod("insertItem", descriptor).instrument(exprEditor);
 			
 			descriptor = Descriptor.ofMethod(CtClass.booleanType, new CtClass[] { classPool.get("com.wurmonline.server.items.Item"), CtClass.booleanType });
-			classPool.get("com.wurmonline.server.items.Item").getMethod("testInsertHollowItem", descriptor).instrument(exprEditor);
-			
-		
-		} catch (NotFoundException | CannotCompileException e) {
+			ctItem.getMethod("testInsertHollowItem", descriptor).instrument(exprEditor);
+
+			descriptor = Descriptor.ofMethod(CtClass.booleanType, new CtClass[] { classPool.get("com.wurmonline.server.creatures.Creature"), CtClass.longType, CtClass.booleanType });
+			CtMethod method = ctItem.getMethod("moveToItem", descriptor);
+
+			ctItem.getClassFile().compact();
+
+			MethodInfo methodInfo = method.getMethodInfo();
+			CodeAttribute codeAttribute = methodInfo.getCodeAttribute();
+			LocalNameLookup localNames = new LocalNameLookup((LocalVariableAttribute) codeAttribute.getAttribute(LocalVariableAttribute.tag));
+
+			Bytecode bytecode = new Bytecode(methodInfo.getConstPool());
+			bytecode.addAload(localNames.get("target"));
+			bytecode.addInvokevirtual("com/wurmonline/server/items/Item", "getVolume", "()I");
+			bytecode.addIload(localNames.get("volAvail"));
+			bytecode.add(Bytecode.ISUB);
+			byte[] search = bytecode.get();
+
+			bytecode = new Bytecode(methodInfo.getConstPool());
+			bytecode.addAload(localNames.get("target"));
+			bytecode.addInvokevirtual("com/wurmonline/server/items/Item", "getContainerVolume", "()I");
+			bytecode.addIload(localNames.get("volAvail"));
+			bytecode.add(Bytecode.ISUB);
+			byte[] replace = bytecode.get();
+
+			new CodeReplacer(codeAttribute).replaceCode(search, replace);
+
+		} catch (NotFoundException | CannotCompileException | BadBytecode e) {
 			throw new HookException(e);
 		}
 	}
@@ -130,6 +166,12 @@ public class BagOfHoldingMod implements WurmServerMod, Initable, PreInitable, Co
 							Item target = (Item)proxy;
 							
 							float modifier = BagOfHolding.getSpellEffect(target);
+
+							if (allowComponentItems && target.isComponentItem()) {
+								Item parent = target.getParentOrNull();
+								if (parent != null && BagOfHolding.isValidTarget(parent))
+									modifier = BagOfHolding.getSpellEffect(parent);
+							}
 							
 							if (effectModifier == 0) {
 								if (modifier > 1) {

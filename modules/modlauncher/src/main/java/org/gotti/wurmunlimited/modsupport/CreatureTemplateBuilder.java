@@ -64,7 +64,9 @@ public class CreatureTemplateBuilder {
 	private String handDamString;
 
 	private String kickDamString;
-	
+
+	private String headbuttDamString;
+
 	private short vision;
 
 	private byte sex;
@@ -133,12 +135,27 @@ public class CreatureTemplateBuilder {
 
 	private boolean glowing;
 
+	private int[] combatMoves;
+
+	private boolean isEggLayer;
+
+	private int eggTemplate;
+
+	private boolean hasHands;
+
+	private boolean keepSex;
+
+	private int maxPopulationOfCreatures;
+
+	private int paintMode;
+
+	private float bonusCombatRating;
 
 	public CreatureTemplateBuilder(int id) {
 		this.templateId = id;
 		defaultSkills();
 	}
-	
+
 	public CreatureTemplateBuilder(String identifier) {
 		this(IdFactory.getIdFor(identifier, IdType.CREATURETEMPLATE));
 	}
@@ -297,6 +314,25 @@ public class CreatureTemplateBuilder {
 		return this;
 	}
 
+	/**
+	 * Set headbutt damage string
+	 * @param headbuttDamString headbutt damage string
+	 */
+	public CreatureTemplateBuilder headbuttDamString(String headbuttDamString) {
+		this.headbuttDamString = headbuttDamString;
+		return this;
+	}
+
+	/**
+	 * Creature is an egg layer
+	 * @param eggTemplate Egg template. -1 disabled egg laying
+	 */
+	public CreatureTemplateBuilder eggLayer(int eggTemplate) {
+		this.isEggLayer = eggTemplate != -1;
+		this.eggTemplate = eggTemplate;
+		return this;
+	}
+
 	public CreatureTemplate build() {
 		try {
 			final Skills skills = SkillsFactory.createSkills(name);
@@ -312,9 +348,13 @@ public class CreatureTemplateBuilder {
 
 			if (this.handDamString != null)
 				temp.setHandDamString(handDamString);
-			
+
 			if (this.kickDamString != null)
 				ReflectionUtil.callPrivateMethod(temp, ReflectionUtil.getMethod(CreatureTemplate.class, "setKickDamString"), kickDamString);
+
+			if (this.headbuttDamString != null) {
+				temp.setHeadbuttDamString(headbuttDamString);
+			}
 
 			if (maxAge > 0)
 				ReflectionUtil.callPrivateMethod(temp, ReflectionUtil.getMethod(CreatureTemplate.class, "setMaxAge"), maxAge);
@@ -369,6 +409,28 @@ public class CreatureTemplateBuilder {
 				temp.setOnFire(onFire);
 				temp.setFireRadius(fireRadius);
 			}
+			if (combatMoves != null) {
+				temp.setCombatMoves(combatMoves);
+			}
+
+			if (isEggLayer) {
+				temp.setEggLayer(this.isEggLayer);
+				temp.setEggTemplateId(this.eggTemplate);
+			}
+
+			if (hasHands) {
+				ReflectionUtil.setPrivateField(temp, ReflectionUtil.getField(CreatureTemplate.class, "hasHands"), hasHands);
+			}
+
+			temp.setKeepSex(keepSex);
+
+			if (maxPopulationOfCreatures > 0) {
+				temp.setMaxPopulationOfCreatures(maxPopulationOfCreatures);
+			}
+
+			temp.setPaintMode(paintMode);
+
+			temp.setBonusCombatRating(bonusCombatRating);
 
 			return temp;
 		} catch (IOException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | ClassCastException | NoSuchFieldException e) {
@@ -510,8 +572,38 @@ public class CreatureTemplateBuilder {
 		this.fireRadius = fireRadius;
 		return this;
 	}
+	
+	public CreatureTemplateBuilder setCombatMoves(int[] aCombatMoves) {
+		this.combatMoves = aCombatMoves;
+		return this;
+	}
 
 	public int getTemplateId() {
 		return templateId;
+	}
+
+	public CreatureTemplateBuilder hasHands(boolean hasHands) {
+		this.hasHands = hasHands;
+		return this;
+	}
+
+	public CreatureTemplateBuilder keepSex(boolean keepSex) {
+		this.keepSex = keepSex;
+		return this;
+	}
+
+	public CreatureTemplateBuilder maxPopulationOfCreatures(int maxPopulationOfCreatures) {
+		this.maxPopulationOfCreatures = maxPopulationOfCreatures;
+		return this;
+	}
+
+	public CreatureTemplateBuilder paintMode(int paintMode) {
+		this.paintMode = paintMode;
+		return this;
+	}
+
+	public CreatureTemplateBuilder bonusCombatRating(int bonusCombatRating) {
+		this.bonusCombatRating = baseCombatRating;
+		return this;
 	}
 }

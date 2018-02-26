@@ -1,14 +1,25 @@
 package org.gotti.wurmunlimited.mods.creatureagemod;
 
-import java.lang.reflect.Field;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
+
+import org.gotti.wurmunlimited.modloader.callbacks.CallbackApi;
+import org.gotti.wurmunlimited.modloader.classhooks.HookException;
+import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
+import org.gotti.wurmunlimited.modloader.interfaces.Configurable;
+import org.gotti.wurmunlimited.modloader.interfaces.Initable;
+import org.gotti.wurmunlimited.modloader.interfaces.PreInitable;
+import org.gotti.wurmunlimited.modloader.interfaces.WurmServerMod;
+import org.gotti.wurmunlimited.modsupport.creatures.CreatureTemplateParser;
+
+import com.wurmonline.server.WurmCalendar;
+import com.wurmonline.server.creatures.CreatureStatus;
+import com.wurmonline.server.creatures.CreatureTemplateIds;
 
 import javassist.CannotCompileException;
 import javassist.CtClass;
@@ -16,17 +27,6 @@ import javassist.CtMethod;
 import javassist.NotFoundException;
 import javassist.expr.ExprEditor;
 import javassist.expr.FieldAccess;
-
-import org.gotti.wurmunlimited.modloader.classhooks.HookException;
-import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
-import org.gotti.wurmunlimited.modloader.interfaces.Configurable;
-import org.gotti.wurmunlimited.modloader.interfaces.Initable;
-import org.gotti.wurmunlimited.modloader.interfaces.PreInitable;
-import org.gotti.wurmunlimited.modloader.interfaces.WurmServerMod;
-
-import com.wurmonline.server.WurmCalendar;
-import com.wurmonline.server.creatures.CreatureStatus;
-import com.wurmonline.server.creatures.CreatureTemplateIds;
 
 public class CreatureAgeMod implements WurmServerMod, Configurable, Initable, PreInitable {
 
@@ -47,54 +47,30 @@ public class CreatureAgeMod implements WurmServerMod, Configurable, Initable, Pr
 
 	@Override
 	public void configure(Properties properties) {
-		Map<String, Integer> nameToId = new HashMap<>();
-		Map<Integer, String> idToName = new HashMap<>();
-		for (Field field : CreatureTemplateIds.class.getFields()) {
-			String name = field.getName().toLowerCase();
-			if (name.endsWith("_cid")) {
-				name = name.replaceAll("_cid$", "");
-				try {
-					int id = field.getInt(CreatureTemplateIds.class);
-					nameToId.put(name, id);
-					idToName.put(id, name);
-				} catch (IllegalAccessException e) {
-					logger.log(Level.WARNING, null, e);
-				}
-			}
-		}
-		
 		
 		increaseGrowthUntilAge = Integer.valueOf(properties.getProperty("increaseGrowthUntilAge", Integer.toString(increaseGrowthUntilAge)));
 		increaseGrowthTimer = Math.min(ORIG_CREATURE_POLL_TIMER, Long.valueOf(properties.getProperty("increaseGrowthTimer", Long.toString(increaseGrowthTimer))));
 		
+		final CreatureTemplateParser parser = new CreatureTemplateParser() {
+			protected int unparsable(String name) {
+				logger.warning("Invalid template " + name);
+				return -1;
+			};
+		};
+		
 		String excl = properties.getProperty("excludedTemplates");
 		if (excl != null) {
-			excludedTemplates = new HashSet<>();
-			for (String name : excl.split(",")) {
-				Integer id = nameToId.get(name);
-				if (id == null) {
-					try {
-						id = Integer.parseInt(name);
-					} catch (NumberFormatException e) {
-						id = null;
-					}
-				}
-				if (id == null) {
-					logger.warning("Invalid template " + id);
-					continue;
-				}
-				excludedTemplates.add(id);
-			}
+			excludedTemplates = Arrays.stream(parser.parseList(excl)).filter(i -> i != -1).boxed().collect(Collectors.toSet());
 		}
 
 		logger.log(Level.INFO, "increaseGrowthUntilAge: " + increaseGrowthUntilAge);
 		logger.log(Level.INFO, "increaseGrowthTimer: " + increaseGrowthTimer);
 		
-		Iterable<String> iterable = () -> excludedTemplates.stream().map((id) -> idToName.get(id)).iterator();
-		logger.log(Level.INFO, "excludedTemplates: " + String.join(",", iterable));
+		logger.log(Level.INFO, "excludedTemplates: " + parser.toString(excludedTemplates.stream().mapToInt(Integer::intValue).toArray()));
 	}
 	
-	public static long getAdjustedLastPolledAge(CreatureStatus creatureStatus, boolean reborn) {
+	@CallbackApi
+	public long getAdjustedLastPolledAge(CreatureStatus creatureStatus, boolean reborn) {
 
 		int age = creatureStatus.age;
 		int templateId = creatureStatus.getTemplate().getTemplateId();
@@ -109,8 +85,10 @@ public class CreatureAgeMod implements WurmServerMod, Configurable, Initable, Pr
 	@Override
 	public void preInit() {
 		try {
-		
-			CtClass ctCreatureStatus = HookManager.getInstance().getClassPool().get("com.wurmonline.server.creatures.CreatureStatus");
+			
+			final CtClass ctCreatureStatus = HookManager.getInstance().getClassPool().get("com.wurmonline.server.creatures.CreatureStatus");
+			HookManager.getInstance().addCallback(ctCreatureStatus, "creatureagemod", this);
+			
 			CtMethod method = ctCreatureStatus.getMethod("pollAge", "(I)Z");
 			method.instrument(new ExprEditor() {
 				
@@ -119,7 +97,7 @@ public class CreatureAgeMod implements WurmServerMod, Configurable, Initable, Pr
 					if ("lastPolledAge".equals(f.getFieldName())) {
 						StringBuilder replacement = new StringBuilder();
 						
-						replacement.append(String.format("$_ = %s#getAdjustedLastPolledAge(this, reborn);", CreatureAgeMod.class.getName()));
+						replacement.append("$_ = creatureagemod.getAdjustedLastPolledAge(this, reborn);");
 						f.replace(replacement.toString());
 					}
 				}
