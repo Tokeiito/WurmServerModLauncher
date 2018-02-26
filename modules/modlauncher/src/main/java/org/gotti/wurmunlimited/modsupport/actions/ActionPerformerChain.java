@@ -14,7 +14,7 @@ import com.wurmonline.server.structures.Fence;
 import com.wurmonline.server.structures.Floor;
 import com.wurmonline.server.structures.Wall;
 
-class ActionPerformerChain implements ActionPerformer {
+class ActionPerformerChain implements ActionPerformerBase {
 	
 	private short actionId;
 	
@@ -37,12 +37,12 @@ class ActionPerformerChain implements ActionPerformer {
 		actionPerformers.add(actionPerformer);
 	}
 	
-	public boolean action(Action action, Creature performer, Item source, int tilex, int tiley, boolean onSurface, boolean corner, int tile, short num, float counter) {
-		return wrap(action).action(action, performer, source, tilex, tiley, onSurface, corner, tile, num, counter);
+	public boolean action(Action action, Creature performer, Item source, int tilex, int tiley, boolean onSurface, boolean corner, int tile, int heightOffset, short num, float counter) {
+		return wrap(action).action(action, performer, source, tilex, tiley, onSurface, corner, tile, heightOffset, num, counter);
 	}
 
-	public boolean action(Action action, Creature performer, int tilex, int tiley, boolean onSurface, boolean corner, int tile, short num, float counter) {
-		return wrap(action).action(action, performer, tilex, tiley, onSurface, corner, tile, num, counter);
+	public boolean action(Action action, Creature performer, int tilex, int tiley, boolean onSurface, boolean corner, int tile, int heightOffset, short num, float counter) {
+		return wrap(action).action(action, performer, tilex, tiley, onSurface, corner, tile, heightOffset, num, counter);
 	}
 
 	public boolean action(Action action, Creature performer, int tilex, int tiley, boolean onSurface, int tile, short num, float counter) {
@@ -137,7 +137,28 @@ class ActionPerformerChain implements ActionPerformer {
 		return wrap(action).action(action, performer, item, onSurface, bridgePart, encodedTile, num, counter);
 	}
 	
-	private WrappedBehaviour wrap(Action action) {
-		return new WrappedBehaviour(action.getBehaviour(), actionPerformers);
+	@Override
+	public boolean action(Action action, Creature performer, Item source, int tilex, int tiley, boolean onSurface, boolean corner, int tile, short num, float counter) {
+		return wrap(action).action(action, performer, source, tilex, tiley, onSurface, corner, tile, 0, num, counter);
 	}
+
+	@Override
+	public boolean action(Action action, Creature performer, int tilex, int tiley, boolean onSurface, boolean corner, int tile, short num, float counter) {
+		return wrap(action).action(action, performer, tilex, tiley, onSurface, corner, tile, 0, num, counter);
+	}
+
+	@Override
+	public boolean action(Action action, Creature performer, int tilex, int tiley, boolean onSurface, int tile, int dir, short num, float counter) {
+		return wrap(action).action(action, performer, tilex, tiley, onSurface, tile, dir, num, counter);
+	}
+
+	@Override
+	public boolean action(Action action, Creature performer, Item source, int tilex, int tiley, boolean onSurface, int heightOffset, int tile, int dir, short num, float counter) {
+		return wrap(action).action(action, performer, source, tilex, tiley, onSurface, heightOffset, tile, dir, num, counter);
+	}
+
+	private WrappedBehaviour wrap(Action action) {
+		return new WrappedBehaviour(action.getBehaviour(), WrappedBehaviour.getDefaultActionReturnValue(action), actionPerformers);
+	}
+
 }

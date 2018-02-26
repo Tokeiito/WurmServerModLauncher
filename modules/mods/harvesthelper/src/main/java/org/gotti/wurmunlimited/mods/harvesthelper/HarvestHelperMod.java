@@ -28,6 +28,7 @@ import org.gotti.wurmunlimited.modloader.interfaces.WurmServerMod;
 
 import com.wurmonline.server.Server;
 import com.wurmonline.server.WurmCalendar;
+import com.wurmonline.server.WurmHarvestables.Harvestable;
 import com.wurmonline.server.creatures.Communicator;
 import com.wurmonline.server.players.Player;
 
@@ -83,20 +84,21 @@ public class HarvestHelperMod implements WurmServerMod, Configurable, Initable, 
 	public void init() {
 	}
 	
-	private List<HarvestHelperSeasons> getSortedSeasons() {
-		return Arrays.stream(HarvestHelperSeasons.values()).sorted(comparator.reversed()).collect(Collectors.toList());
+	private List<Harvestable> getSortedHarvestables() {
+		final Comparator<Harvestable> comparator = Comparator.comparing(Harvestable::getSeasonStart);
+		return Arrays.stream(Harvestable.values()).filter(harvestable -> harvestable != Harvestable.NONE).sorted(comparator.reversed()).collect(Collectors.toList());
 	}
 
 	@Override
 	public void onPlayerLogin(Player player) {
 		if (enableSeasonsMotd && player != null) {
 			long now = WurmCalendar.currentTime;
-			for (HarvestHelperSeasons season : getSortedSeasons()) {
-				long start = season.getStartGrowth();
+			for (Harvestable harvestable : getSortedHarvestables()) {
+				long start = harvestable.getSeasonStart();
 				if (now >= start) {
-					player.getCommunicator().sendNormalServerMessage(String.format("%s is in season", capitalize(season.getName())));
+					player.getCommunicator().sendNormalServerMessage(String.format("%s is in season", capitalize(harvestable.getName())));
 				} else if (now >= start - 345600L) {
-					player.getCommunicator().sendNormalServerMessage(String.format("%s will soon be in season", capitalize(season.getName())));
+					player.getCommunicator().sendNormalServerMessage(String.format("%s will soon be in season", capitalize(harvestable.getName())));
 				}
 			}
 		}
@@ -106,13 +108,13 @@ public class HarvestHelperMod implements WurmServerMod, Configurable, Initable, 
 	public boolean onPlayerMessage(Communicator communicator, String message) {
 		if (enableSeasonsCommand && message != null && message.startsWith("/seasons")) {
 			long now = WurmCalendar.currentTime;
-			for (HarvestHelperSeasons season : getSortedSeasons()) {
-				long start = season.getStartGrowth();
+			for (Harvestable harvestable : getSortedHarvestables()) {
+				long start = harvestable.getSeasonStart();
 				if (now >= start) {
-					communicator.sendNormalServerMessage(String.format("%s is in season", capitalize(season.getName())));
+					communicator.sendNormalServerMessage(String.format("%s is in season", capitalize(harvestable.getName())));
 				} else {
 					long duration = start - now;
-					communicator.sendNormalServerMessage(String.format("%s will be in season in %s", capitalize(season.getName()), Server.getTimeFor(duration * 1000 / 8)));
+					communicator.sendNormalServerMessage(String.format("%s will be in season in %s", capitalize(harvestable.getName()), Server.getTimeFor(duration * 1000 / 8)));
 				}
 			}
 			return true;
@@ -124,14 +126,6 @@ public class HarvestHelperMod implements WurmServerMod, Configurable, Initable, 
 		if (s == null || s.length() == 0) {
 			return s;
 		}
-		return s.substring(0, 1).toUpperCase() + s.substring(1);
+		return s.substring(0, 1).toUpperCase() + s.substring(1).toLowerCase();
 	}
-	
-	private static Comparator<HarvestHelperSeasons> comparator = new Comparator<HarvestHelperSeasons>() {
-
-		@Override
-		public int compare(HarvestHelperSeasons o1, HarvestHelperSeasons o2) {
-			return Long.compare(o1.getStartGrowth(), o2.getStartGrowth());
-		}
-	}; 
 }

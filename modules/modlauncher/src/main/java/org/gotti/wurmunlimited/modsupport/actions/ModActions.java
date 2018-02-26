@@ -27,6 +27,8 @@ public class ModActions {
 	
 	private static boolean inited = false;
 	
+	private static short lastServerActionId = 0;
+	
 	private static List<BehaviourProvider> behaviourProviders = new CopyOnWriteArrayList<>();
 	private static ConcurrentHashMap<Short, ActionPerformerChain> actionPerformers = new ConcurrentHashMap<>();
 	
@@ -34,7 +36,20 @@ public class ModActions {
 		return Actions.actionEntrys.length;
 	}
 	
+	private static void initLastServerActionId() {
+		if (lastServerActionId == 0) {
+			lastServerActionId = (short) (Actions.actionEntrys.length - 1);
+		}
+	}
+	
+	public static short getLastServerActionId() {
+		initLastServerActionId();
+		return lastServerActionId;
+	}
+	
 	public static void registerAction(ActionEntry actionEntry) {
+		
+		initLastServerActionId();
 		
 		short number = actionEntry.getNumber();
 		
@@ -109,7 +124,7 @@ public class ModActions {
 					if (m.getClassName().equals("com.wurmonline.server.behaviours.Behaviour") && m.getMethodName().equals("action")) {
 						StringBuffer code = new StringBuffer();
 						code.append("{\n");
-						code.append("    org.gotti.wurmunlimited.modsupport.actions.ActionPerformer actionPerformer = org.gotti.wurmunlimited.modsupport.actions.ModActions.getActionPerformer(this);\n");
+						code.append("    org.gotti.wurmunlimited.modsupport.actions.ActionPerformerBase actionPerformer = org.gotti.wurmunlimited.modsupport.actions.ModActions.getActionPerformer(this);\n");
 						code.append("    if (actionPerformer != null) {\n");
 						code.append("        $_ = actionPerformer.action($$);\n");
 						code.append("    } else {\n");
@@ -129,7 +144,7 @@ public class ModActions {
 		}
 	}
 	
-	public static ActionPerformer getActionPerformer(Action action) {
+	public static ActionPerformerBase getActionPerformer(Action action) {
 		short actionId = action.getActionEntry().getNumber();
 		return actionPerformers.get(actionId);
 	}
@@ -141,5 +156,4 @@ public class ModActions {
 		
 		return new ChainedBehaviourProvider(new WrappedBehaviourProvider(behaviour), behaviourProviders);
 	}
-
 }
